@@ -2,6 +2,25 @@ import streamlit as st
 import pandas as pd
 import math
 
+# --- INTERFACE DA APLICAÇÃO WEB ---
+
+st.set_page_config(
+    page_title="Gerador de Escala Híbrida",
+    page_icon="📅",
+    layout="centered"
+)
+
+# --- INSERÇÃO DA LOGO ---
+# O arquivo "inovadoria_fundo escuro 1b.png" deve estar na mesma pasta que este script.
+try:
+    st.image("inovadoria_fundo escuro 1b.png", width=300) # Você pode ajustar a largura (width)
+except FileNotFoundError:
+    st.warning("Logo 'inovadoria_fundo escuro 1b.png' não encontrada. Verifique o nome e o local do arquivo.")
+
+
+st.title("📅 Gerador de Escala de Trabalho Híbrido")
+st.markdown("Preencha os dados da sua equipe na barra lateral à esquerda para gerar o relatório.")
+
 
 # --- FUNÇÃO DE CÁLCULO (Lógica principal - sem alterações) ---
 def processar_dados_e_gerar_relatorio(nome_setor, dias_uteis, dados_equipe, limites_por_cargo):
@@ -32,8 +51,11 @@ def processar_dados_e_gerar_relatorio(nome_setor, dias_uteis, dados_equipe, limi
     escala_semanal = {dia: [] for dia in dias_uteis}
     dias_remotos_restantes = limites_individuais.copy()
 
+    # Ordena os servidores para dar prioridade a quem tem menos dias (opcional, mas melhora a distribuição)
+    servidores_ordenados = sorted(servidores_disponiveis, key=lambda s: limites_individuais.get(s['nome'], 0))
+
     for dia in dias_uteis:
-        for servidor in servidores_disponiveis:
+        for servidor in servidores_ordenados:
             nome_servidor = servidor["nome"]
             if dias_remotos_restantes.get(nome_servidor, 0) > 0 and len(escala_semanal[dia]) < limite_efetivo_diario:
                 escala_semanal[dia].append(nome_servidor)
@@ -50,7 +72,7 @@ def processar_dados_e_gerar_relatorio(nome_setor, dias_uteis, dados_equipe, limi
     }
 
 
-# --- NOVA FUNÇÃO PARA CRIAR A PLANILHA ---
+# --- FUNÇÃO PARA CRIAR A PLANILHA ---
 def criar_dataframe_para_csv(relatorio):
     """
     Transforma os dados do relatório em uma tabela (DataFrame) do pandas
@@ -79,19 +101,13 @@ def criar_dataframe_para_csv(relatorio):
         dados_planilha.append(linha_servidor)
 
     df = pd.DataFrame(dados_planilha)
+    # Garante que a ordem das colunas seja 'Servidor' e depois os dias da semana
+    colunas = ['Servidor'] + dias_uteis
+    df = df[colunas]
     return df
 
 
-# --- INTERFACE DA APLICAÇÃO WEB ---
-
-st.set_page_config(
-    page_title="Gerador de Escala Híbrida",
-    page_icon="📅",
-    layout="centered"
-)
-
-st.title("📅 Gerador de Escala de Trabalho Híbrido")
-st.markdown("Preencha os dados da sua equipe na barra lateral à esquerda para gerar o relatório.")
+# --- BARRA LATERAL PARA ENTRADA DE DADOS ---
 
 CARGOS_E_LIMITES = {
     "Não ocupante de CC/FC": 3, "FC": 3, "Assessor CC1-CC4": 3, "Chefe CC1-CC3": 3,
@@ -118,13 +134,15 @@ with st.sidebar:
             motivo_afastamento = ""
             if status == "Afastado":
                 motivo_afastamento = st.text_input("Motivo do afastamento", key=f"motivo_{i}")
-                status_final = f"Afastado (Motivo: {motivo_afastamento})"
+                status_final = f"Afastado ({motivo_afastamento})"
             else:
                 status_final = "Disponível"
 
             dados_equipe_input.append({"nome": nome, "cargo": cargo, "status": status_final})
 
     submit_button = st.button("Gerar Relatório de Escala")
+
+# --- LÓGICA PRINCIPAL E EXIBIÇÃO DO RELATÓRIO ---
 
 if submit_button:
     if not all(s['nome'] for s in dados_equipe_input):
@@ -164,7 +182,7 @@ if submit_button:
         st.subheader("2. Sugestão de Escala Semanal")
         st.markdown("Baseado nos limites, uma possível escala é:")
         for dia, nomes in relatorio['escala_semanal'].items():
-            nomes_str = ", ".join(nomes) if nomes else "Ninguém"
+            nomes_str = ", ".join(sorted(nomes)) if nomes else "Ninguém"
             st.markdown(f"- **{dia}:** {nomes_str}")
 
         # --- SEÇÃO DE EXPORTAÇÃO ---
@@ -185,6 +203,6 @@ if submit_button:
         st.download_button(
             label="Baixar escala em formato CSV",
             data=csv,
-            file_name=f"escala_{nome_setor_input.lower()}.csv",
+            file_name=f"escala_{nome_setor_input.lower().replace(' ', '_')}.csv",
             mime="text/csv",
         )
