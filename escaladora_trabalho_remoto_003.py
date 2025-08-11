@@ -35,7 +35,8 @@ def processar_dados_e_gerar_relatorio(nome_setor, dias_uteis, dados_equipe, limi
     limite_base = math.ceil(total_servidores * 0.5)
     limite_efetivo_diario = min(int(limite_base), num_servidores_disponiveis)
 
-    dias_nao_uteis = 5 - len(dias_uteis)
+    # O cálculo agora se baseia nos dias selecionados, não mais em 5 dias fixos.
+    dias_nao_uteis = len(["Seg", "Ter", "Qua", "Qui", "Sex"]) - len(dias_uteis)
     deducao_feriado = 0
     if 1 <= dias_nao_uteis <= 2:
         deducao_feriado = 1
@@ -120,7 +121,15 @@ with st.sidebar:
     st.header("⚙️ Insira os Dados da Equipe")
 
     nome_setor_input = st.text_input("Nome do Setor", "SELOG")
-    dias_input = st.text_input("Dias úteis da semana (separados por vírgula)", "Seg,Ter,Qua,Qui,Sex")
+    
+    # --- ALTERAÇÃO AQUI: de st.text_input para st.multiselect ---
+    opcoes_dias = ["Seg", "Ter", "Qua", "Qui", "Sex"]
+    dias_uteis_lista = st.multiselect(
+        "Selecione os dias úteis da semana",
+        options=opcoes_dias,
+        default=opcoes_dias # Por padrão, todos os dias vêm marcados
+    )
+
     num_servidores = st.number_input("Número total de servidores na equipe", min_value=1, value=3, step=1)
 
     dados_equipe_input = []
@@ -145,11 +154,13 @@ with st.sidebar:
 # --- LÓGICA PRINCIPAL E EXIBIÇÃO DO RELATÓRIO ---
 
 if submit_button:
+    # Validação para garantir que os campos obrigatórios foram preenchidos
     if not all(s['nome'] for s in dados_equipe_input):
         st.error("Erro: Todos os servidores devem ter um nome.")
+    elif not dias_uteis_lista:
+        st.error("Erro: Selecione pelo menos um dia útil da semana.")
     else:
-        dias_uteis_lista = [dia.strip() for dia in dias_input.split(',')]
-
+        # A variável dias_uteis_lista já vem pronta do multiselect
         CARGOS_E_LIMITES["Teletrabalho (condições especiais Art. 16)"] = len(dias_uteis_lista)
 
         relatorio = processar_dados_e_gerar_relatorio(
@@ -181,7 +192,9 @@ if submit_button:
 
         st.subheader("2. Sugestão de Escala Semanal")
         st.markdown("Baseado nos limites, uma possível escala é:")
-        for dia, nomes in relatorio['escala_semanal'].items():
+        # Ordena os dias para exibição consistente
+        for dia in sorted(relatorio['escala_semanal'].keys(), key=opcoes_dias.index):
+            nomes = relatorio['escala_semanal'][dia]
             nomes_str = ", ".join(sorted(nomes)) if nomes else "Ninguém"
             st.markdown(f"- **{dia}:** {nomes_str}")
 
